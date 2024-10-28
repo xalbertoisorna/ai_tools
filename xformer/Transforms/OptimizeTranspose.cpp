@@ -55,19 +55,17 @@ struct FoldTrReFCPattern : public OpRewritePattern<TFL::FullyConnectedOp> {
     for (auto val : permAttr.getValues<int32_t>())
       permVec.push_back(static_cast<int64_t>(val));
 
+    // Compute inverse permutation vector
+    SmallVector<int64_t, 4> invPermVec(permVec.size());
+    for (size_t i = 0; i < permVec.size(); ++i) {
+      invPermVec[permVec[i]] = i;
+    }
+
     // Get shapes
     auto reshapeInputType =
         reshapeOp.getInput().getType().cast<RankedTensorType>();
-    auto reshapeOutputType =
-        reshapeOp.getResult().getType().cast<RankedTensorType>();
-    if (!reshapeInputType || !reshapeOutputType)
+    if (!reshapeInputType)
       return failure();
-
-    SmallVector<int64_t, 4> reshapeInputShapeVec(
-        reshapeInputType.getShape().begin(), reshapeInputType.getShape().end());
-    SmallVector<int64_t, 4> reshapeOutputShapeVec(
-        reshapeOutputType.getShape().begin(),
-        reshapeOutputType.getShape().end());
 
     // Transpose the filter weights
     Value filter = fcOp.getFilter();
@@ -82,7 +80,6 @@ struct FoldTrReFCPattern : public OpRewritePattern<TFL::FullyConnectedOp> {
       // Get filter type and shape
       auto filterType = filter.getType().dyn_cast<RankedTensorType>();
       if (!filterType) {
-
         return failure();
       }
       auto filterShape = filterType.getShape();
@@ -90,25 +87,21 @@ struct FoldTrReFCPattern : public OpRewritePattern<TFL::FullyConnectedOp> {
                                              filterShape.end());
 
       // Compute the reshape shape for the filter
-      // The filter is typically of shape [output_size, input_size]
       int64_t outputSize = filterShapeVec[0];
-      int64_t inputSize = filterShapeVec[1];
 
-      // Reshape the filter to [output_size] + reshapeInputShapeVec
+      // Reshape the filter to reshapeInputShapeVec[1:] + [outputSize]
       SmallVector<int64_t, 4> reshapedFilterShapeVec(
-          reshapeInputShapeVec.begin() + 1, reshapeInputShapeVec.end());
+          reshapeInputType.getShape().begin() + 1,
+          reshapeInputType.getShape().end());
       reshapedFilterShapeVec.push_back(outputSize);
 
-      // Prepare permutation vector for the filter
-      // Since the data is transposed before reshape, we need to adjust the
-      // filter accordingly. The first dimension (output_size) remains
-      // unchanged.
-      //
+      // Prepare inverse permutation vector for the filter
+      // Exclude the batch dimension
       SmallVector<int64_t, 4> filterPermVec;
-      for (size_t i = 1; i < permVec.size(); i++) {
-        filterPermVec.push_back(permVec[i] - 1);
+      for (size_t i = 1; i < invPermVec.size(); ++i) {
+        filterPermVec.push_back(invPermVec[i] - 1);
       }
-      filterPermVec.push_back(permVec.size() - 1);
+      filterPermVec.push_back(invPermVec.size() - 1);
 
       // Original filter shape vector
       SmallVector<int64_t, 4> origFilterShapeVec(filterShapeVec.begin(),
@@ -118,7 +111,7 @@ struct FoldTrReFCPattern : public OpRewritePattern<TFL::FullyConnectedOp> {
       if (failed(utils::reshapeTransposeReshape(
               rewriter, filter, reshapedFilterShapeVec, filterPermVec,
               origFilterShapeVec, finalFilter))) {
-
+        llvm::outs() << "Failed to reshape filter\n";
         return failure();
       }
 
@@ -130,13 +123,9 @@ struct FoldTrReFCPattern : public OpRewritePattern<TFL::FullyConnectedOp> {
     // Create new reshape op (from transpose's input to reshape's output)
     Value newInput = transposeOp.getInput();
 
-    // Create new shape const op for reshape
-    Value newShapeConstOp = utils::createShapeConstOp(
-        rewriter, reshapeOp.getLoc(), reshapeOutputShapeVec);
-
     auto newReshapeOp = rewriter.create<TFL::ReshapeOp>(
         reshapeOp.getLoc(), reshapeOp.getResult().getType(), newInput,
-        newShapeConstOp);
+        reshapeOp.getShape());
 
     // Create new fully_connected op with adjusted filter
     auto newFullyConnectedOp = rewriter.create<TFL::FullyConnectedOp>(
