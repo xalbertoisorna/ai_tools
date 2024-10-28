@@ -8,6 +8,7 @@
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "tensorflow/compiler/mlir/lite/ir/tfl_ops.h"
+#include <cstdint>
 
 namespace mlir::xcore::utils {
 
@@ -83,6 +84,14 @@ reshapeTransposeReshape(PatternRewriter &rewriter, Value tensor,
                         const SmallVectorImpl<int64_t> &permVec,
                         const SmallVectorImpl<int64_t> &origShape,
                         Value &result);
+
+template <typename T = int64_t>
+static SmallVector<T, 4> denseToVector(DenseIntElementsAttr permAttr) {
+  SmallVector<T, 4> permVec;
+  for (auto val : permAttr.getValues<int32_t>())
+    permVec.push_back(static_cast<T>(val));
+  return permVec;
+}
 } // namespace mlir::xcore::utils
 
 #endif // XFORMER_UTILS_UTIL_H

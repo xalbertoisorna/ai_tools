@@ -216,4 +216,5 @@ reshapeTransposeReshape(PatternRewriter &rewriter, Value tensor,
   result = finalTensor.getResult();
   return success();
 }
+
 } // namespace mlir::xcore::utils
