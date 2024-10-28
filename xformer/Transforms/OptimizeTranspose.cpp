@@ -180,8 +180,9 @@ struct FoldFCReTrPattern : public OpRewritePattern<TFL::TransposeOp> {
     // unchanged
     auto fcOutputShape = fcOutputType.getShape();
     auto reshapeOutputShape = reshapeOutputType.getShape();
-    SmallVector<int64_t, 4> reshapeOutputShapeVec(reshapeOutputShape.begin(),
-                                                  reshapeOutputShape.end());
+    auto transposeOutputShape = transposeOutputType.getShape();
+    SmallVector<int64_t, 4> transposeOutputShapeVec(
+        transposeOutputShape.begin(), transposeOutputShape.end());
 
     if (reshapeOutputShape[0] != 1) {
       return failure();
@@ -198,13 +199,14 @@ struct FoldFCReTrPattern : public OpRewritePattern<TFL::TransposeOp> {
     if (!matchPattern(transposeOp.getPerm(), m_Constant(&permAttr)))
       return failure();
 
-    SmallVector<int64_t, 4> permVec;
-    for (auto val : permAttr.getValues<int32_t>()) {
-      permVec.push_back(static_cast<int64_t>(val));
+    SmallVector<int64_t, 4> invPermVec;
+    for (int32_t val : permAttr.getValues<int32_t>()) {
+      invPermVec.push_back(
+          static_cast<int64_t>(permAttr.getValues<int32_t>()[val]));
     }
 
     // Check if batch dimension remains at position 0 after transpose
-    if (permVec.empty() || permVec[0] != 0)
+    if (invPermVec.empty() || invPermVec[0] != 0)
       return failure();
 
     // Prepare to transform the filter and bias
@@ -226,9 +228,9 @@ struct FoldFCReTrPattern : public OpRewritePattern<TFL::TransposeOp> {
 
       SmallVector<int64_t, 4> biasShapeVec(biasShape.begin(), biasShape.end());
       Value finalBias;
-      if (failed(utils::reshapeTransposeReshape(rewriter, bias,
-                                                reshapeOutputShapeVec, permVec,
-                                                biasShapeVec, finalBias)))
+      if (failed(utils::reshapeTransposeReshape(
+              rewriter, bias, transposeOutputShapeVec, invPermVec, biasShapeVec,
+              finalBias)))
         return failure();
 
       // Update bias
@@ -254,12 +256,12 @@ struct FoldFCReTrPattern : public OpRewritePattern<TFL::TransposeOp> {
       // should be the first dimension of the filterShape
       SmallVector<int64_t, 4> filterOutShapeVec = {filterShape[1]};
       filterOutShapeVec.insert(filterOutShapeVec.end(),
-                               reshapeOutputShapeVec.begin() + 1,
-                               reshapeOutputShapeVec.end());
+                               transposeOutputShapeVec.begin() + 1,
+                               transposeOutputShapeVec.end());
 
       Value finalFilter;
       if (failed(utils::reshapeTransposeReshape(rewriter, filter,
-                                                filterOutShapeVec, permVec,
+                                                filterOutShapeVec, invPermVec,
                                                 filterShapeVec, finalFilter)))
         return failure();
       filter = finalFilter;
