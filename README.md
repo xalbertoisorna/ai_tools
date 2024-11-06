@@ -105,5 +105,8 @@ ie.invoke()
 xformer_outputs = []
 num_of_outputs = len(ie.get_output_details())
 for i in range(num_of_outputs):
-    xformer_outputs.append(ie.get_tensor(ie.get_output_details()[i]['index']))
+    xformer_outputs.append(ie.get_tensor(ie.get_output_details()[i]['index'])).
+
+# Note: use ie.close() or "with TFLMHostInterpreter() as ie:" to free resources
+ie.close()
 ```
