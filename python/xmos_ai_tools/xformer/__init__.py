@@ -5,7 +5,8 @@ from typing import Union, List, Optional
 from .flash import generate_flash
 import re
 
-__compilation_output = ""
+__compilation_stdout = ""
+__compilation_stderr = ""
 __arena_size = 0
 
 
@@ -29,20 +30,22 @@ def convert(
 
     args.append(str(filename))
 
-    process_call: subprocess.CompletedProcess = subprocess.run(
-        [arg for arg in args],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=True,
-    )
-
-    global __compilation_output, __arena_size
-    __compilation_output = process_call.stdout.decode("utf-8")
-    size_str = re.sub("((.|\n|\r)*)Tensor arena size :", "", __compilation_output)
-    size_str = re.sub("(\n|\r)((.|\n|\r)*)", "", size_str)
-    __arena_size = int(size_str.strip())
-
-    return process_call.returncode
+    try:
+        process_call: subprocess.CompletedProcess = subprocess.run(
+            [arg for arg in args],
+            check=True, text=True, capture_output=True,
+        )
+        global __compilation_stdout, __compilation_stderr, __arena_size
+        __compilation_stdout = process_call.stdout
+        __compilation_stderr = process_call.stderr
+        size_str = re.sub("((.|\n|\r)*)Tensor arena size :", "", __compilation_stdout)
+        size_str = re.sub("(\n|\r)((.|\n|\r)*)", "", size_str)
+        __arena_size = int(size_str.strip())
+        return process_call.returncode
+    except subprocess.CalledProcessError as e:
+        print(e)
+        print("Return code:", e.returncode)
+        print("Error output:", e.stderr)
 
 
 def tensor_arena_size() -> int:
@@ -50,7 +53,8 @@ def tensor_arena_size() -> int:
 
 
 def print_optimization_report():
-    print(__compilation_output)
+    print(__compilation_stderr)
+    print(__compilation_stdout)
 
 
 def print_help(show_hidden: Optional[bool] = False) -> int:

@@ -242,7 +242,6 @@ class TFLMHostInterpreter:
         if self.obj:
             lib.delete_interpreter(self.obj)
             self.obj = None
-            print(self.obj)
 
     def tensor_arena_size(self) -> int:
         """! Read the size of the tensor arena required.
