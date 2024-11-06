@@ -86,6 +86,9 @@ struct ChannelwiseSplitConv2DOutputPattern
       return splitResultType;
     };
 
+    if(!llvm::isa<TFL::QConstOp>(op.getFilter().getDefiningOp()))
+      return failure();
+
     auto filterQConstOp =
         dyn_cast<TFL::QConstOp>(op.getFilter().getDefiningOp());
     auto filterType = op.getFilter().getType().cast<ShapedType>();

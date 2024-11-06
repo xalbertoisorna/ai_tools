@@ -22,6 +22,8 @@ void buildXCorePreOpSplitPassPipeline(OpPassManager &pm) {
 void buildXCoreRemainingPassPipeline(OpPassManager &pm) {
   // TFL passes
   pm.addPass(createOptimizeTransposePass());
+  // Run canonicalization for constant folding Transpose, if any
+  pm.addPass(mlir::createCanonicalizerPass());
   pm.addPass(createReplaceAvgPoolWithConv2DPass());
   pm.addPass(createReplaceFCWithConv2DPass());
   if (opSplitTensorArenaOption) {

@@ -641,8 +641,9 @@ void OptimizeTranspose::runOnOperation() {
 
   patterns.insert<HoistTransposeWCHAbovePadPattern>(ctx);
   patterns.insert<FoldCancellableTransposePattern>(ctx);
-  patterns.insert<FoldFCReTrPattern>(ctx);
-  patterns.insert<FoldTrReFCPattern>(ctx);
+  // TODO - enable after transpose permutation fix
+  // patterns.insert<FoldFCReTrPattern>(ctx);
+  // patterns.insert<FoldTrReFCPattern>(ctx);
   if (allowInputModificationOption) {
     patterns.insert<FoldTransposeWCHToInput>(ctx);
   }
