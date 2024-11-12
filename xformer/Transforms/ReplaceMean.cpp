@@ -1,6 +1,3 @@
-// Copyright 2021 XMOS LIMITED. This Software is subject to the terms of the
-// XMOS Public License: Version 1
-
 #include "IR/XCoreOps.h"
 #include "Utils/Util.h"
 
@@ -16,7 +13,7 @@ extern "C" {
 namespace mlir::xcore {
 
 namespace {
-// Replace TFL Mean with Mean for XCore.
+// Replace TFL Mean with Mean or Mean16 for XCore.
 struct ReplaceMean
     : public PassWrapper<ReplaceMean, OperationPass<func::FuncOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ReplaceMean)
@@ -26,7 +23,7 @@ struct ReplaceMean
   }
   StringRef getArgument() const final { return "xcore-replace-mean"; }
   StringRef getDescription() const final {
-    return "Replace TFL Mean with Mean for XCore.";
+    return "Replace TFL Mean with Mean or Mean16 for XCore.";
   }
   void runOnOperation() override;
 };
@@ -41,7 +38,9 @@ struct ReplaceMeanPattern : public OpRewritePattern<TFL::MeanOp> {
     auto output = meanOp.getOutput();
 
     DenseElementsAttr axisAttr;
-    matchPattern(meanOp.getAxis(), m_Constant(&axisAttr));
+    if (!matchPattern(meanOp.getAxis(), m_Constant(&axisAttr))) {
+      return failure();
+    }
     auto axisValues = axisAttr.getValues<int32_t>();
     std::vector<int32_t> axis(axisValues.begin(), axisValues.end());
     int32_t minAxis = *std::min_element(axis.begin(), axis.end());
@@ -52,14 +51,19 @@ struct ReplaceMeanPattern : public OpRewritePattern<TFL::MeanOp> {
 
     auto inputType = input.getType().cast<ShapedType>();
     auto outputType = output.getType().cast<ShapedType>();
-    if (!utils::isNBitSignedQType<8>(inputType.getElementType()) ||
-        !utils::isNBitSignedQType<8>(outputType.getElementType())) {
+
+    // Check if input and output are either int8 or int16.
+    bool isInt8 = utils::isNBitSignedQType<8>(inputType.getElementType()) &&
+                  utils::isNBitSignedQType<8>(outputType.getElementType());
+
+    bool isInt16 = utils::isNBitSignedQType<16>(inputType.getElementType()) &&
+                   utils::isNBitSignedQType<16>(outputType.getElementType());
+
+    if (!(isInt8 || isInt16)) {
       return failure();
     }
 
     auto inputShape = inputType.getShape();
-    auto outputShape = outputType.getShape();
-
     int rank = inputShape.size();
 
     int beginDims = 1;
@@ -80,23 +84,32 @@ struct ReplaceMeanPattern : public OpRewritePattern<TFL::MeanOp> {
     auto inputQType = utils::getQType(input);
     auto outputQType = utils::getQType(output);
 
-    float inZeroPoint = static_cast<float>(inputQType.getZeroPoint());
-    float outZeroPoint = static_cast<float>(outputQType.getZeroPoint());
-    float scaleMul = inputQType.getScale() / outputQType.getScale() /
-                     static_cast<float>(meanDims);
+    float scaleMul =
+        inputQType.getScale() / outputQType.getScale() / static_cast<float>(meanDims);
+    auto scaleMulAttr = rewriter.getF32FloatAttr(scaleMul);
 
     auto beginDimsAttr = rewriter.getI32IntegerAttr(beginDims);
     auto endDimsAttr = rewriter.getI32IntegerAttr(endDims);
     auto meanDimsAttr = rewriter.getI32IntegerAttr(meanDims);
-    auto inZeroPointAttr = rewriter.getF32FloatAttr(inZeroPoint);
-    auto outZeroPointAttr = rewriter.getF32FloatAttr(outZeroPoint);
-    auto scaleMulAttr = rewriter.getF32FloatAttr(scaleMul);
 
-    auto xcMeanOp = rewriter.create<MeanOp>(
-        meanOp.getLoc(), meanOp.getType(), meanOp.getInput(), beginDimsAttr,
-        meanDimsAttr, endDimsAttr, inZeroPointAttr, outZeroPointAttr,
-        scaleMulAttr);
-    rewriter.replaceOp(meanOp, xcMeanOp.getOutput());
+    if (isInt8) {
+      float inZeroPoint = static_cast<float>(inputQType.getZeroPoint());
+      float outZeroPoint = static_cast<float>(outputQType.getZeroPoint());
+      auto inZeroPointAttr = rewriter.getF32FloatAttr(inZeroPoint);
+      auto outZeroPointAttr = rewriter.getF32FloatAttr(outZeroPoint);
+
+      auto xcMeanOp = rewriter.create<MeanOp>(
+          meanOp.getLoc(), meanOp.getType(), meanOp.getInput(), beginDimsAttr,
+          meanDimsAttr, endDimsAttr, inZeroPointAttr, outZeroPointAttr,
+          scaleMulAttr);
+      rewriter.replaceOp(meanOp, xcMeanOp.getOutput());
+    } else { // isInt16
+      // Zero points are always zero for int16 and are not passed to Mean16Op.
+      auto xcMeanOp = rewriter.create<Mean16Op>(
+          meanOp.getLoc(), meanOp.getType(), meanOp.getInput(), beginDimsAttr,
+          meanDimsAttr, endDimsAttr, scaleMulAttr);
+      rewriter.replaceOp(meanOp, xcMeanOp.getOutput());
+    }
 
     return success();
   }

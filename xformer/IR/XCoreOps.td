@@ -215,6 +215,23 @@ def XC_MeanOp : XC_Op<"mean", [Pure]> {
   let results = (outs TensorOf<[QI8]> : $output);
 }
 
+def XC_Mean16Op : XC_Op<"mean16", [Pure]> {
+  let summary = "Mean int16 op";
+
+  let description = [{Mean int16 op.}];
+
+  let arguments = (ins
+    TensorOf<[QI16]>:$input,
+
+    I32Attr:$start,
+    I32Attr:$mean,
+    I32Attr:$end,
+    F32Attr:$scale_mul
+  );
+
+  let results = (outs TensorOf<[QI16]> : $output);
+}
+
 def XC_MulOp : XC_Op<"mul", [Pure, XC_MemoryOverlappable]> {
   let summary = "Mul op";
 

@@ -1,6 +1,3 @@
-// Copyright 2021 XMOS LIMITED. This Software is subject to the terms of the
-// XMOS Public License: Version 1
-
 #include "IR/XCoreOps.h"
 #include "Utils/Util.h"
 
@@ -16,7 +13,7 @@ extern "C" {
 namespace mlir::xcore {
 
 namespace {
-// Replace TFL Sum with Mean for XCore.
+// Replace TFL Sum with Mean or Mean16 for XCore.
 struct ReplaceSum
     : public PassWrapper<ReplaceSum, OperationPass<func::FuncOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ReplaceSum)
@@ -26,7 +23,7 @@ struct ReplaceSum
   }
   StringRef getArgument() const final { return "xcore-replace-sum"; }
   StringRef getDescription() const final {
-    return "Replace TFL Sum with mean for XCore.";
+    return "Replace TFL Sum with Mean or Mean16 for XCore.";
   }
   void runOnOperation() override;
 };
@@ -52,8 +49,15 @@ struct ReplaceSumPattern : public OpRewritePattern<TFL::SumOp> {
 
     auto inputType = input.getType().cast<ShapedType>();
     auto outputType = output.getType().cast<ShapedType>();
-    if (!utils::isNBitSignedQType<8>(inputType.getElementType()) ||
-        !utils::isNBitSignedQType<8>(outputType.getElementType())) {
+
+    // Check if input and output are either int8 or int16.
+    bool isInt8 = utils::isNBitSignedQType<8>(inputType.getElementType()) &&
+                  utils::isNBitSignedQType<8>(outputType.getElementType());
+
+    bool isInt16 = utils::isNBitSignedQType<16>(inputType.getElementType()) &&
+                   utils::isNBitSignedQType<16>(outputType.getElementType());
+
+    if (!(isInt8 || isInt16)) {
       return failure();
     }
 
@@ -80,22 +84,31 @@ struct ReplaceSumPattern : public OpRewritePattern<TFL::SumOp> {
     auto inputQType = utils::getQType(input);
     auto outputQType = utils::getQType(output);
 
-    float inZeroPoint = static_cast<float>(inputQType.getZeroPoint());
-    float outZeroPoint = static_cast<float>(outputQType.getZeroPoint());
     float scaleMul = inputQType.getScale() / outputQType.getScale();
+    auto scaleMulAttr = rewriter.getF32FloatAttr(scaleMul);
 
     auto beginDimsAttr = rewriter.getI32IntegerAttr(beginDims);
     auto endDimsAttr = rewriter.getI32IntegerAttr(endDims);
     auto meanDimsAttr = rewriter.getI32IntegerAttr(sumDims);
-    auto inZeroPointAttr = rewriter.getF32FloatAttr(inZeroPoint);
-    auto outZeroPointAttr = rewriter.getF32FloatAttr(outZeroPoint);
-    auto scaleMulAttr = rewriter.getF32FloatAttr(scaleMul);
 
-    auto xcSumOp = rewriter.create<MeanOp>(
-        sumOp.getLoc(), sumOp.getType(), sumOp.getInput(), beginDimsAttr,
-        meanDimsAttr, endDimsAttr, inZeroPointAttr, outZeroPointAttr,
-        scaleMulAttr);
-    rewriter.replaceOp(sumOp, xcSumOp.getOutput());
+    if (isInt8) {
+      float inZeroPoint = static_cast<float>(inputQType.getZeroPoint());
+      float outZeroPoint = static_cast<float>(outputQType.getZeroPoint());
+      auto inZeroPointAttr = rewriter.getF32FloatAttr(inZeroPoint);
+      auto outZeroPointAttr = rewriter.getF32FloatAttr(outZeroPoint);
+
+      auto xcSumOp = rewriter.create<MeanOp>(
+          sumOp.getLoc(), sumOp.getType(), sumOp.getInput(), beginDimsAttr,
+          meanDimsAttr, endDimsAttr, inZeroPointAttr, outZeroPointAttr,
+          scaleMulAttr);
+      rewriter.replaceOp(sumOp, xcSumOp.getOutput());
+    } else { // isInt16
+      // Zero points are always zero for int16 and are not passed to Mean16Op.
+      auto xcSumOp = rewriter.create<Mean16Op>(
+          sumOp.getLoc(), sumOp.getType(), sumOp.getInput(), beginDimsAttr,
+          meanDimsAttr, endDimsAttr, scaleMulAttr);
+      rewriter.replaceOp(sumOp, xcSumOp.getOutput());
+    }
 
     return success();
   }
