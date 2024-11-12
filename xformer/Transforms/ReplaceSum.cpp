@@ -104,7 +104,7 @@ struct ReplaceSumPattern : public OpRewritePattern<TFL::SumOp> {
       rewriter.replaceOp(sumOp, xcSumOp.getOutput());
     } else { // isInt16
       // Zero points are always zero for int16 and are not passed to Mean16Op.
-      auto xcSumOp = rewriter.create<Mean16Op>(
+      auto xcSumOp = rewriter.create<MeanI16Op>(
           sumOp.getLoc(), sumOp.getType(), sumOp.getInput(), beginDimsAttr,
           meanDimsAttr, endDimsAttr, scaleMulAttr);
       rewriter.replaceOp(sumOp, xcSumOp.getOutput());
