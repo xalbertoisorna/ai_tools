@@ -139,6 +139,28 @@ private:
   std::vector<std::vector<char>> *tensorsVec_;
 };
 
+struct LowerToAsyncLoadsPattern : public OpRewritePattern<LoadWeightsOp> {
+  LowerToAsyncLoadsPattern(MLIRContext *context)
+      : OpRewritePattern<LoadWeightsOp>(context) {}
+
+  LogicalResult matchAndRewrite(LoadWeightsOp loadWeightsOp,
+                                PatternRewriter &rewriter) const override {
+    // We use loadWeightsOp.getResultTypes() as Load Weights op can have
+    // variadic number of results
+    auto loadWeightsAsyncOp = rewriter.create<LoadWeightsAsyncOp>(
+        loadWeightsOp.getLoc(), loadWeightsOp.getResultTypes(),
+        loadWeightsOp.getAddress(), loadWeightsOp.getSizes());
+
+    auto loadWeightsWaitOp = rewriter.create<LoadWeightsWaitOp>(
+        loadWeightsAsyncOp.getLoc(), loadWeightsAsyncOp.getResultTypes(),
+        loadWeightsAsyncOp.getResults());
+
+    rewriter.replaceOp(loadWeightsOp, loadWeightsWaitOp.getOutput());
+
+    return success();
+  }
+};
+
 void WriteWeights::runOnOperation() {
   func::FuncOp f = getOperation();
   if (weightsFilenameOption.empty()) {
@@ -154,6 +176,7 @@ void WriteWeights::runOnOperation() {
   std::vector<std::vector<char>> tensorsVec;
   RewritePatternSet patterns(ctx);
   patterns.insert<WriteWeightsPattern>(&tensorsVec, ctx);
+  patterns.insert<LowerToAsyncLoadsPattern>(ctx);
   (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
   if (failed(utils::writeWeightsToFile(weightsFilenameOption, tensorsVec,
