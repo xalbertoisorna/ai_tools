@@ -537,6 +537,26 @@ def XC_LoadWeightsOp : XC_Op<"ld_weights", [Pure]> {
   let results = (outs Variadic<AnyTensor> : $output);
 }
 
+def XC_LoadWeightsAsyncOp : XC_Op<"ld_weights_async", [Pure]> {
+  let summary = "Load weights async op";
+
+  let description = [{Load weights async op.}];
+
+  let arguments = (ins I32Attr : $address, I32ArrayAttr : $sizes);
+
+  let results = (outs Variadic<AnyTensor> : $output);
+}
+
+def XC_LoadWeightsWaitOp : XC_Op<"ld_weights_wait", [Pure]> {
+  let summary = "Load weights wait op";
+
+  let description = [{Load weights wait op.}];
+
+  let arguments = (ins Variadic<AnyTensor> : $input);
+
+  let results = (outs Variadic<AnyTensor> : $output);
+}
+
 def XC_Bsign8Op : XC_Op<"bsign_8", [Pure]> {
   let summary = "Binary sign op";
 
