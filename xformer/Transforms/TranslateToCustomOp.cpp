@@ -81,6 +81,18 @@ std::vector<uint8_t> MeanOp::buildCustomOptions() {
   return fbb.GetBuffer();
 }
 
+std::vector<uint8_t> MeanI16Op::buildCustomOptions() {
+  flexbuffers::Builder fbb;
+  auto rootMap = fbb.StartMap();
+  fbb.Int("s", (int32_t)getStart());
+  fbb.Int("m", (int32_t)getMean());
+  fbb.Int("e", (int32_t)getEnd());
+  fbb.IndirectFloat("sm", getScaleMul().convertToFloat());
+  fbb.EndMap(rootMap);
+  fbb.Finish();
+  return fbb.GetBuffer();
+}
+
 std::vector<uint8_t> SliceOp::buildCustomOptions() {
   flexbuffers::Builder fbb;
   auto rootMap = fbb.StartMap();
@@ -268,6 +280,7 @@ void TranslateToCustomOp::runOnOperation() {
   patterns.insert<RewriteToCustomOp<BatchedSoftmaxOp>>(ctx);
   patterns.insert<RewriteToCustomOp<MulOp>>(ctx);
   patterns.insert<RewriteToCustomOp<MeanOp>>(ctx);
+  patterns.insert<RewriteToCustomOp<MeanI16Op>>(ctx);
   patterns.insert<RewriteToCustomOp<Pad3To4Op>>(ctx);
   patterns.insert<RewriteToCustomOp<SliceOp>>(ctx);
   patterns.insert<RewriteToCustomOp<BroadcastOp>>(ctx);
