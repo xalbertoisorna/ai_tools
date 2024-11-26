@@ -94,7 +94,8 @@ struct WriteWeightsPattern : public OpRewritePattern<LoadConstantOp> {
 
       auto loadWeightsOp = rewriter.create<LoadWeightsOp>(
           loadOp.getLoc(), outputTypes, address,
-          rewriter.getArrayAttr(dataSizes), /*in_ddr=*/false);
+          rewriter.getArrayAttr(dataSizes),
+          stringifyLoadWeightsOpType(LoadWeightsOpType::Sync));
 
       for (int i = 0; i < opNums.size(); i++) {
         ownerOp->setOperand(opNums[i], loadWeightsOp.getResult(i));
@@ -115,7 +116,8 @@ struct WriteWeightsPattern : public OpRewritePattern<LoadConstantOp> {
       }
       auto loadWeightsOp = rewriter.create<LoadWeightsOp>(
           loadOp.getLoc(), loadOp.getType(), address,
-          rewriter.getArrayAttr(dataSizes), /*in_ddr=*/weightsInExternalMemory);
+          rewriter.getArrayAttr(dataSizes),
+          stringifyLoadWeightsOpType(LoadWeightsOpType::DDR));
       rewriter.replaceOp(loadOp, loadWeightsOp.getOutput());
 
       // Find all uses of loadWeightsOp and find the first Owner op
@@ -146,11 +148,17 @@ struct LowerToAsyncLoadsPattern : public OpRewritePattern<LoadWeightsOp> {
 
   LogicalResult matchAndRewrite(LoadWeightsOp loadWeightsOp,
                                 PatternRewriter &rewriter) const override {
+    if (loadWeightsOp.getOpType() !=
+        stringifyLoadWeightsOpType(LoadWeightsOpType::Sync)) {
+      return failure();
+    }
+
     // We use loadWeightsOp.getResultTypes() as Load Weights op can have
     // variadic number of results
-    auto loadWeightsAsyncOp = rewriter.create<LoadWeightsAsyncOp>(
+    auto loadWeightsAsyncOp = rewriter.create<LoadWeightsOp>(
         loadWeightsOp.getLoc(), loadWeightsOp.getResultTypes(),
-        loadWeightsOp.getAddress(), loadWeightsOp.getSizes());
+        loadWeightsOp.getAddress(), loadWeightsOp.getSizes(),
+        stringifyLoadWeightsOpType(LoadWeightsOpType::Async));
 
     auto loadWeightsWaitOp = rewriter.create<LoadWeightsWaitOp>(
         loadWeightsAsyncOp.getLoc(), loadWeightsAsyncOp.getResultTypes(),
@@ -177,7 +185,9 @@ void WriteWeights::runOnOperation() {
   std::vector<std::vector<char>> tensorsVec;
   RewritePatternSet patterns(ctx);
   patterns.insert<WriteWeightsPattern>(&tensorsVec, ctx);
-  patterns.insert<LowerToAsyncLoadsPattern>(ctx);
+  if (asyncLoadWeightsOption) {
+    patterns.insert<LowerToAsyncLoadsPattern>(ctx);
+  }
   (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
   // Reorder async load to be before previous convolution
@@ -194,10 +204,14 @@ void WriteWeights::runOnOperation() {
   }
 
   for (auto o : ops) {
-    if (llvm::isa<LoadWeightsAsyncOp>(o)) {
-      int idx = llvm::lower_bound(convOpIds, opIdMap[o]) - convOpIds.begin();
-      if (idx > 0) {
-        o->moveBefore(ops[convOpIds[idx - 1]]);
+    if (llvm::isa<LoadWeightsOp>(o)) {
+      auto ldOp = dyn_cast<LoadWeightsOp>(o);
+      if (ldOp.getOpType() ==
+          stringifyLoadWeightsOpType(LoadWeightsOpType::Async)) {
+        int idx = llvm::lower_bound(convOpIds, opIdMap[o]) - convOpIds.begin();
+        if (idx > 0) {
+          o->moveBefore(ops[convOpIds[idx - 1]]);
+        }
       }
     }
   }
