@@ -1,6 +1,7 @@
 // Copyright 2021 XMOS LIMITED. This Software is subject to the terms of the
 // XMOS Public License: Version 1
 
+#include "Analysis/MemoryPlan.h"
 #include "IR/XCoreOps.h"
 #include "Transforms/Options.h"
 #include "Utils/FileIO.h"
@@ -178,6 +179,26 @@ void WriteWeights::runOnOperation() {
   patterns.insert<WriteWeightsPattern>(&tensorsVec, ctx);
   patterns.insert<LowerToAsyncLoadsPattern>(ctx);
   (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+
+  // Reorder async load to be before previous convolution
+  // so that the compute can be overlapped with the load
+  auto &m = getAnalysis<MemoryPlan>();
+  auto opIdMap = m.getOperationsIDMap();
+  auto ops = m.getOperationsSequence();
+
+  llvm::SetVector<int> convOpIds;
+  for (auto o : ops) {
+    if (llvm::isa<Conv2DV2Op>(o)) {
+      convOpIds.insert(opIdMap[o]);
+    }
+  }
+
+  for (auto o : ops) {
+    if (llvm::isa<LoadWeightsAsyncOp>(o)) {
+      int idx = llvm::lower_bound(convOpIds, opIdMap[o]) - convOpIds.begin();
+      o->moveBefore(ops[convOpIds[idx - 1]]);
+    }
+  }
 
   if (failed(utils::writeWeightsToFile(weightsFilenameOption, tensorsVec,
                                        weightsAsArrayOption,
