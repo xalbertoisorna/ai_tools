@@ -163,11 +163,13 @@ std::vector<int> MemoryPlan::getAllocatedOffsets(const bool overlapOps,
     for (auto o : operations) {
 
       // For async loads, use the same buffer for load and wait
-      if(llvm::isa<LoadWeightsWaitOp>(o)){
-        auto inVal = o->getOperand(0);
-        auto outVal = o->getResult(0);
-        vInfo[outVal].firstUsed = vInfo[inVal].firstUsed;
-        inOutMap[inVal] = {outVal, 0};
+      if (llvm::isa<LoadWeightsWaitOp>(o)) {
+        for (int i = 0; i < o->getNumOperands(); i++) {
+          auto inVal = o->getOperand(i);
+          auto outVal = o->getResult(i);
+          vInfo[outVal].firstUsed = vInfo[inVal].firstUsed;
+          inOutMap[inVal] = {outVal, 0};
+        }
       }
 
       // We iterate through overlappable ops which have not been visited yet
