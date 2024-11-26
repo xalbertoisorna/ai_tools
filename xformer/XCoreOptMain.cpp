@@ -85,6 +85,12 @@ cl::opt<bool> weightsInExternalMemory(
              "it in external memory."),
     cl::init(false), cl::cat(XformerCategory));
 
+cl::opt<bool> asyncLoadWeightsOption(
+    "xcore-async-load-weights",
+    cl::desc("Enable loading weights from flash asynchronously. This does not "
+             "affect loads from external memory."),
+    cl::init(false), cl::cat(XformerCategory));
+
 cl::opt<unsigned> loadExternallyIfLargerOption(
     "xcore-load-externally-if-larger",
     cl::desc("Load constants externally if larger than given limit in bytes "
@@ -470,8 +476,14 @@ int main(int argc, char **argv) {
   if (mlir::xcore::weightsInExternalMemory.getNumOccurrences() > 0 &&
       mlir::xcore::weightsAsArrayOption.getNumOccurrences() == 0) {
     return failedMessage(
-        "Please specify the xcore-write-weights-as-array"
-        "when using the xcore-weights-in-external-memory option!");
+        "Please specify xcore-write-weights-as-array"
+        " when using the xcore-weights-in-external-memory option!");
+  }
+
+  if (mlir::xcore::weightsInExternalMemory.getNumOccurrences() > 0 &&
+      mlir::xcore::asyncLoadWeightsOption.getNumOccurrences() > 0) {
+    return failedMessage("Please don't specify xcore-weights-in-external-memory"
+                         " when using the xcore-async-load-weights option!");
   }
 
   if (mlir::xcore::loadExternallyIfLargerOption.getNumOccurrences() > 0 &&
