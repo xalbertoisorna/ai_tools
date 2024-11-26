@@ -15,6 +15,7 @@ extern llvm::cl::opt<unsigned> threadCountOption;
 extern llvm::cl::opt<std::string> weightsFilenameOption;
 extern llvm::cl::opt<unsigned> loadExternallyIfLargerOption;
 extern llvm::cl::opt<bool> weightsAsArrayOption;
+extern llvm::cl::opt<bool> asyncLoadWeightsOption;
 extern llvm::cl::opt<bool> weightsInExternalMemory;
 extern llvm::cl::opt<unsigned> maxLoadExternalSizeOption;
 extern llvm::cl::opt<double> convQuantErrorThresholdOption;
