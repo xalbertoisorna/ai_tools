@@ -196,7 +196,9 @@ void WriteWeights::runOnOperation() {
   for (auto o : ops) {
     if (llvm::isa<LoadWeightsAsyncOp>(o)) {
       int idx = llvm::lower_bound(convOpIds, opIdMap[o]) - convOpIds.begin();
-      o->moveBefore(ops[convOpIds[idx - 1]]);
+      if (idx > 0) {
+        o->moveBefore(ops[convOpIds[idx - 1]]);
+      }
     }
   }
 
