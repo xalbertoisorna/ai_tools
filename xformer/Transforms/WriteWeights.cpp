@@ -71,6 +71,7 @@ struct WriteWeightsPattern : public OpRewritePattern<LoadConstantOp> {
     // load is not from external memory.
     // External memory loads have to be aligned to 32 bytes/256 bits for max
     // speed
+    LoadWeightsOpType opType = LoadWeightsOpType::Sync;
     if (loadOp.getResult().hasOneUse() && !weightsInExternalMemory) {
       auto use = loadOp->use_begin();
       Operation *ownerOp = use->getOwner();
@@ -94,8 +95,7 @@ struct WriteWeightsPattern : public OpRewritePattern<LoadConstantOp> {
 
       auto loadWeightsOp = rewriter.create<LoadWeightsOp>(
           loadOp.getLoc(), outputTypes, address,
-          rewriter.getArrayAttr(dataSizes),
-          stringifyLoadWeightsOpType(LoadWeightsOpType::Sync));
+          rewriter.getArrayAttr(dataSizes), stringifyLoadWeightsOpType(opType));
 
       for (int i = 0; i < opNums.size(); i++) {
         ownerOp->setOperand(opNums[i], loadWeightsOp.getResult(i));
@@ -113,11 +113,11 @@ struct WriteWeightsPattern : public OpRewritePattern<LoadConstantOp> {
         auto toBePaddedSize = alignedSize - loadOpData.size();
         // Pad with zeros
         tensorData.insert(tensorData.end(), toBePaddedSize, 0);
+        opType = LoadWeightsOpType::DDR;
       }
       auto loadWeightsOp = rewriter.create<LoadWeightsOp>(
           loadOp.getLoc(), loadOp.getType(), address,
-          rewriter.getArrayAttr(dataSizes),
-          stringifyLoadWeightsOpType(LoadWeightsOpType::DDR));
+          rewriter.getArrayAttr(dataSizes), stringifyLoadWeightsOpType(opType));
       rewriter.replaceOp(loadOp, loadWeightsOp.getOutput());
 
       // Find all uses of loadWeightsOp and find the first Owner op
