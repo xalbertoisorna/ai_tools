@@ -400,6 +400,51 @@ struct FoldCancellableTransposePattern
     return success();
   }
 };
+
+struct FoldDoubleTransposePattern : public OpRewritePattern<TFL::TransposeOp> {
+  using OpRewritePattern<TFL::TransposeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(TFL::TransposeOp op,
+                                PatternRewriter &rewriter) const override {
+
+    // Check for invalid types and return
+    // Defining op must be transpose
+    auto transposeOp =
+        dyn_cast_or_null<TFL::TransposeOp>(op.getInput().getDefiningOp());
+    if (!transposeOp) {
+      return failure();
+    }
+
+    // Get transpose permutations
+    DenseIntElementsAttr perm0;
+    DenseIntElementsAttr perm1;
+    if (!matchPattern(op.getPerm(), m_Constant(&perm0)) ||
+        !matchPattern(transposeOp.getPerm(), m_Constant(&perm1))) {
+      return failure();
+    }
+
+    // merge the two permutations
+    SmallVector<int32_t, 4> permVec;
+    for (auto val : perm1.getValues<int32_t>()) {
+      permVec.push_back(perm0.getValues<int32_t>()[val]);
+    }
+
+    // Create the permutation constant with correct data types
+    auto permType = RankedTensorType::get(
+        {static_cast<int64_t>(permVec.size())}, rewriter.getIntegerType(32));
+    auto permAttr = DenseIntElementsAttr::get(permType, permVec);
+    auto permConstOp =
+        rewriter.create<arith::ConstantOp>(op.getLoc(), permType, permAttr);
+
+    // Create the new TransposeOp with the original output type
+    auto newTransposeOp = rewriter.create<TFL::TransposeOp>(
+        op.getLoc(), op.getType(), transposeOp.getInput(),
+        permConstOp.getResult());
+
+    return success();
+  }
+};
+
 struct MoveTransposeForwardOverConcatOpPattern
     : public OpRewritePattern<TFL::ConcatenationOp> {
   using OpRewritePattern::OpRewritePattern;
@@ -631,7 +676,7 @@ void OptimizeTranspose::runOnOperation() {
   RewritePatternSet mergePatterns(ctx);
   mergePatterns.insert<MoveTransposeForwardOverUnaryOpPattern,
                        MoveTransposeForwardOverConcatOpPattern,
-                       FoldCancellableTransposePattern>(ctx);
+                       FoldDoubleTransposePattern>(ctx);
   if (mergeTransposeOption) {
     (void)applyPatternsAndFoldGreedily(func, std::move(mergePatterns));
   }
@@ -640,7 +685,7 @@ void OptimizeTranspose::runOnOperation() {
   RewritePatternSet patterns(ctx);
 
   patterns.insert<HoistTransposeWCHAbovePadPattern>(ctx);
-  patterns.insert<FoldCancellableTransposePattern>(ctx);
+  patterns.insert<FoldDoubleTransposePattern>(ctx);
   // TODO - enable after transpose permutation fix
   // patterns.insert<FoldFCReTrPattern>(ctx);
   // patterns.insert<FoldTrReFCPattern>(ctx);
