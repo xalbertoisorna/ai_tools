@@ -15,6 +15,7 @@ namespace mlir::xcore {
 std::vector<uint8_t> Expand8To16Op::buildCustomOptions() { return {}; }
 std::vector<uint8_t> FakeScratchBufferOp::buildCustomOptions() { return {}; }
 std::vector<uint8_t> Bsign8Op::buildCustomOptions() { return {}; }
+std::vector<uint8_t> LoadWeightsWaitOp::buildCustomOptions() { return {}; }
 
 std::vector<uint8_t> UnaryI16Op::buildCustomOptions() {
   flexbuffers::Builder fbb;
@@ -153,13 +154,13 @@ std::vector<uint8_t> ConcatOp::buildCustomOptions() {
 std::vector<uint8_t> LoadWeightsOp::buildCustomOptions() {
   flexbuffers::Builder fbb;
   auto rootMap = fbb.StartMap();
-  fbb.Int("addr", (int32_t)getAddress());
-  auto sizesVec = fbb.StartVector("sizes");
+  fbb.Int("a", (int32_t)getAddress());
+  auto sizesVec = fbb.StartVector("s");
   for (int i = 0; i < getSizes().cast<ArrayAttr>().size(); ++i) {
     fbb.Int(getSizes().cast<ArrayAttr>()[i].cast<IntegerAttr>().getInt());
   }
   fbb.EndVector(sizesVec, false, false);
-  fbb.Bool("ddr", (bool)getInDdr());
+  fbb.Int("t", (int32_t)(symbolizeLoadWeightsOpType(getOpType()).value()));
   fbb.EndMap(rootMap);
   fbb.Finish();
   return fbb.GetBuffer();
@@ -296,6 +297,7 @@ void TranslateToCustomOp::runOnOperation() {
   patterns.insert<RewriteToCustomOp<FakeScratchBufferOp>>(ctx);
   patterns.insert<RewriteToCustomOp<FakeSliceOp>>(ctx);
   patterns.insert<RewriteToCustomOp<Expand8To16Op>>(ctx);
+  patterns.insert<RewriteToCustomOp<LoadWeightsWaitOp>>(ctx);
 
   (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 }

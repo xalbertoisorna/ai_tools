@@ -47,6 +47,10 @@ public:
 
   int getNextBottomOpId(int opId);
 
+  DenseMap<Operation *, size_t> getOperationsIDMap() { return operationIds; }
+
+  std::vector<Operation *> getOperationsSequence() { return operations; }
+
   // OpSplitPlan getOpSplitPlan();
 
   void printMemoryPlan();

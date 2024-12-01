@@ -509,6 +509,14 @@ def XC_LoadConstantOp
   let results = (outs AnyTensor : $output);
 }
 
+def XC_LoadWeights_Sync : I32EnumAttrCase<"Sync", 0>;
+def XC_LoadWeights_DDR : I32EnumAttrCase<"DDR", 1>;
+def XC_LoadWeights_Async : I32EnumAttrCase<"Async", 2>;
+def XC_LoadWeights_OpTypeAttr
+    : I32EnumAttr<"LoadWeightsOpType", "op type enum", [
+      XC_LoadWeights_Sync, XC_LoadWeights_DDR, XC_LoadWeights_Async
+    ]>;
+
 def XC_LoadWeightsOp : XC_Op<"ld_weights", [Pure]> {
   let summary = "Load weights op";
 
@@ -516,8 +524,18 @@ def XC_LoadWeightsOp : XC_Op<"ld_weights", [Pure]> {
 
   let arguments = (ins I32Attr
                    : $address, I32ArrayAttr
-                   : $sizes, BoolAttr
-                   : $in_ddr);
+                   : $sizes, StrAttr
+                   : $op_type);
+
+  let results = (outs Variadic<AnyTensor> : $output);
+}
+
+def XC_LoadWeightsWaitOp : XC_Op<"ld_weights_wait", [Pure]> {
+  let summary = "Load weights wait op";
+
+  let description = [{Load weights wait op.}];
+
+  let arguments = (ins Variadic<AnyTensor> : $input);
 
   let results = (outs Variadic<AnyTensor> : $output);
 }
