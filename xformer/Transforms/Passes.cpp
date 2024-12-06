@@ -24,6 +24,7 @@ void buildXCoreRemainingPassPipeline(OpPassManager &pm) {
   pm.addPass(createOptimizeTransposePass());
   // Run canonicalization for constant folding Transpose, if any
   pm.addPass(mlir::createCanonicalizerPass());
+  pm.addPass(createOptimizeTransposePass());
   pm.addPass(createReplaceAvgPoolWithConv2DPass());
   pm.addPass(createReplaceFCWithConv2DPass());
   if (opSplitTensorArenaOption) {
@@ -49,7 +50,7 @@ void buildXCoreRemainingPassPipeline(OpPassManager &pm) {
   pm.addPass(createReplaceSlicePass());
   pm.addPass(createReplaceBroadcastPass());
   pm.addPass(createReplaceConcatPass());
-  pm.addPass(createReplaceTransposePass());
+  // pm.addPass(createReplaceTransposePass());
   pm.addPass(createApplyXCPatternsPass());
   // Add to pipeline only if weights file option is provided
   if (!weightsFilenameOption.empty()) {

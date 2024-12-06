@@ -143,10 +143,6 @@ def: Pat<(TFL_MulOp
 // Pad patterns
 def getPadValue : NativeCodeCall<"getPadValue($_builder, $0)">;
 
-def getPaddingPlan
-    : NativeCodeCall<
-          "getPaddingPlan($_builder, $0.getDefiningOp<TFL::PadOp>())">;
-
 def Has3To4Channel
     : Constraint<CPred<"$0.getType().cast<ShapedType>().getDimSize(3) == 3 && "
                        "$1.getType().cast<ShapedType>().getDimSize(3) == 4">>;
