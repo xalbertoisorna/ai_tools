@@ -84,8 +84,8 @@ struct ReplaceMeanPattern : public OpRewritePattern<TFL::MeanOp> {
     auto inputQType = utils::getQType(input);
     auto outputQType = utils::getQType(output);
 
-    float scaleMul =
-        inputQType.getScale() / outputQType.getScale() / static_cast<float>(meanDims);
+    float scaleMul = inputQType.getScale() / outputQType.getScale() /
+                     static_cast<float>(meanDims);
     auto scaleMulAttr = rewriter.getF32FloatAttr(scaleMul);
 
     auto beginDimsAttr = rewriter.getI32IntegerAttr(beginDims);
@@ -105,7 +105,7 @@ struct ReplaceMeanPattern : public OpRewritePattern<TFL::MeanOp> {
       rewriter.replaceOp(meanOp, xcMeanOp.getOutput());
     } else { // isInt16
       // Zero points are always zero for int16 and are not passed to Mean16Op.
-      auto xcMeanOp = rewriter.create<Mean16Op>(
+      auto xcMeanOp = rewriter.create<MeanI16Op>(
           meanOp.getLoc(), meanOp.getType(), meanOp.getInput(), beginDimsAttr,
           meanDimsAttr, endDimsAttr, scaleMulAttr);
       rewriter.replaceOp(meanOp, xcMeanOp.getOutput());

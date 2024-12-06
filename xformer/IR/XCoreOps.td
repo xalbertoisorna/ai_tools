@@ -215,7 +215,7 @@ def XC_MeanOp : XC_Op<"mean", [Pure]> {
   let results = (outs TensorOf<[QI8]> : $output);
 }
 
-def XC_Mean16Op : XC_Op<"mean16", [Pure]> {
+def XC_MeanI16Op : XC_Op<"meani16", [Pure]> {
   let summary = "Mean int16 op";
 
   let description = [{Mean int16 op.}];

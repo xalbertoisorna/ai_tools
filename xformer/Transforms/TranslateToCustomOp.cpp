@@ -81,7 +81,7 @@ std::vector<uint8_t> MeanOp::buildCustomOptions() {
   return fbb.GetBuffer();
 }
 
-std::vector<uint8_t> Mean16Op::buildCustomOptions() {
+std::vector<uint8_t> MeanI16Op::buildCustomOptions() {
   flexbuffers::Builder fbb;
   auto rootMap = fbb.StartMap();
   fbb.Int("s", (int32_t)getStart());
@@ -300,7 +300,7 @@ void TranslateToCustomOp::runOnOperation() {
   patterns.insert<RewriteToCustomOp<BatchedSoftmaxOp>>(ctx);
   patterns.insert<RewriteToCustomOp<MulOp>>(ctx);
   patterns.insert<RewriteToCustomOp<MeanOp>>(ctx);
-  patterns.insert<RewriteToCustomOp<Mean16Op>>(ctx);
+  patterns.insert<RewriteToCustomOp<MeanI16Op>>(ctx);
   patterns.insert<RewriteToCustomOp<Pad3To4Op>>(ctx);
   patterns.insert<RewriteToCustomOp<SliceOp>>(ctx);
   patterns.insert<RewriteToCustomOp<BroadcastOp>>(ctx);
