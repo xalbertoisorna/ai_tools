@@ -171,7 +171,7 @@ def XC_TransposeOp : XC_Op<"transpose", [Pure]> {
     TensorOf<[QI8, QI16, F32, I8, I32]> : $input,
 
     I32ArrayAttr:$offsets,
-    I64ArrayAttr:$t_shape
+    I32ArrayAttr:$t_shape
   );
 
   let results = (outs TensorOf<[QI8, QI16, F32, I8, I32]> : $output);

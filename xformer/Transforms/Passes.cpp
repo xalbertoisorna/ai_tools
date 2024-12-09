@@ -50,7 +50,7 @@ void buildXCoreRemainingPassPipeline(OpPassManager &pm) {
   pm.addPass(createReplaceSlicePass());
   pm.addPass(createReplaceBroadcastPass());
   pm.addPass(createReplaceConcatPass());
-  // pm.addPass(createReplaceTransposePass());
+  pm.addPass(createReplaceTransposePass());
   pm.addPass(createApplyXCPatternsPass());
   // Add to pipeline only if weights file option is provided
   if (!weightsFilenameOption.empty()) {

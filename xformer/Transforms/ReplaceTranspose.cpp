@@ -24,72 +24,148 @@ struct ReplaceTranspose
   void runOnOperation() override;
 };
 
+int twoConsecutive(const SmallVector<int64_t, 4> &perm) {
+  for (int i = 0; i < (int)perm.size() - 1; ++i) {
+    if (perm[i] + 1 == perm[i + 1]) {
+      return i; // Return the index i, not perm[i]
+    }
+  }
+  return -1;
+}
+
 struct ReplaceTransposePattern : public OpRewritePattern<TFL::TransposeOp> {
   using OpRewritePattern<TFL::TransposeOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(TFL::TransposeOp transposeOp,
                                 PatternRewriter &rewriter) const override {
 
-    // Check that input is a RankedTensorType with static shape
     auto inputType =
         transposeOp.getInput().getType().dyn_cast<RankedTensorType>();
     if (!inputType || !inputType.hasStaticShape())
       return failure();
 
-    // Get the input shape
     ArrayRef<int64_t> inputShape = inputType.getShape();
     int64_t rank = inputShape.size();
 
-    // Get the permutation operand (second input)
     Value permValue = transposeOp.getPerm();
-
-    // Check that permValue is a constant
     DenseIntElementsAttr permAttr;
     if (!matchPattern(permValue, m_Constant(&permAttr))) {
       return failure();
     }
 
-    // Extract permutation as an array of integers
-    SmallVector<int32_t, 4> perm;
+    SmallVector<int64_t, 4> perm;
     for (auto val : permAttr.getValues<APInt>()) {
       perm.push_back(val.getSExtValue());
     }
 
-    // Compute offsets and t_shape as per the Python code
-    // Compute offsets = tuple(np.prod(SHAPE[i+1:], dtype=np.int32) for i in
-    // range(len(SHAPE)))
-    SmallVector<int32_t, 4> offsets(rank);
-    for (int i = 0; i < rank; ++i) {
+    SmallVector<int64_t, 4> reducedShape;
+    SmallVector<int64_t, 4> reducedPerm;
+    {
+      SmallVector<int, 4> oldToNew;
+      oldToNew.reserve(rank);
+      for (int i = 0; i < rank; ++i) {
+        if (inputShape[i] != 1) {
+          oldToNew.push_back((int)reducedShape.size());
+          reducedShape.push_back(inputShape[i]);
+        } else {
+          oldToNew.push_back(-1);
+        }
+      }
+
+      for (auto p : perm) {
+        if (oldToNew[p] != -1) {
+          reducedPerm.push_back(oldToNew[p]);
+        }
+      }
+
+      if (reducedShape.empty()) {
+        reducedShape.push_back(1);
+        reducedPerm.push_back(0);
+      }
+    }
+
+    const size_t dtype_size = utils::getTypeSize(inputType.getElementType());
+    if (dtype_size != 1) {
+      reducedShape.push_back((int64_t)dtype_size);
+      reducedPerm.push_back((int64_t)reducedShape.size() - 1);
+    }
+    auto mergeConsecutiveDims = [&](SmallVector<int64_t, 4> &shape,
+                                    SmallVector<int64_t, 4> &perm) {
+      while (true) {
+        int i = twoConsecutive(perm);
+        if (i == -1)
+          break;
+        int64_t p1 = perm[i];
+        int64_t p2 = perm[i + 1];
+
+        shape[p1] *= shape[p2];
+        shape.erase(shape.begin() + p2);
+        perm.erase(perm.begin() + i + 1);
+        for (int j = 0; j < (int)perm.size(); ++j) {
+          if (perm[j] > p2) {
+            perm[j] -= 1;
+          }
+        }
+      }
+    };
+
+    mergeConsecutiveDims(reducedShape, reducedPerm);
+
+    if (reducedShape.size() > 4) {
+      return failure();
+    }
+
+    // If size of reducedShape < 4, pad with 1's at the beginning
+    // After padding shapes, adjust perm so that it matches
+    int dimCount = (int)reducedShape.size();
+    int pad = 4 - dimCount;
+    if (pad > 0) {
+      // Insert 1's at the start of shape
+      SmallVector<int64_t, 4> paddedShape;
+      SmallVector<int64_t, 4> paddedPerm;
+      paddedShape.resize(4, 1); // fill with ones
+      for (int i = 0; i < dimCount; ++i) {
+        paddedShape[pad + i] = reducedShape[i];
+      }
+
+      for (int i = 0; i < pad; ++i) {
+        paddedPerm.push_back(i);
+      }
+      for (auto p : reducedPerm) {
+        paddedPerm.push_back(p + pad);
+      }
+
+      reducedShape = paddedShape;
+      reducedPerm = paddedPerm;
+    }
+
+    const int RANK = 4;
+    SmallVector<int32_t, 4> offsets(RANK);
+    for (int i = 0; i < RANK; ++i) {
       int32_t prod = 1;
-      for (int j = i + 1; j < rank; ++j) {
-        prod *= inputShape[j];
+      for (int j = i + 1; j < RANK; ++j) {
+        prod *= (int32_t)reducedShape[j];
       }
       offsets[i] = prod;
     }
 
-    // Rearrange offsets according to permutation
-    SmallVector<int32_t, 4> permutedOffsets(rank);
-    for (int i = 0; i < rank; ++i) {
-      permutedOffsets[i] = offsets[perm[i]];
+    SmallVector<int32_t, 4> permutedOffsets(RANK);
+    for (int i = 0; i < RANK; ++i) {
+      permutedOffsets[i] = offsets[reducedPerm[i]];
     }
 
-    // Compute t_shape = tuple(SHAPE[p] for p in PERM)
-    SmallVector<int64_t, 4> tShape(rank);
-    for (int i = 0; i < rank; ++i) {
-      tShape[i] = inputShape[perm[i]];
+    // t_shape = tuple(SHAPE[p] for p in PERM)
+    SmallVector<int32_t, 4> tShape(RANK);
+    for (int i = 0; i < RANK; ++i) {
+      tShape[i] = (int32_t)reducedShape[reducedPerm[i]];
     }
 
-    // Create the xcore::TransposeOp with attributes offsets and t_shape
-    // Get the output type
     auto outputType = transposeOp.getOutput().getType();
-
-    // Create the new TransposeOp
     auto newTransposeOp = rewriter.create<TransposeOp>(
         transposeOp.getLoc(), outputType, transposeOp.getInput(),
         rewriter.getI32ArrayAttr(permutedOffsets),
-        rewriter.getI64ArrayAttr(tShape));
+        rewriter.getI32ArrayAttr(tShape));
 
-    // Replace the old TransposeOp
     rewriter.replaceOp(transposeOp, newTransposeOp.getResult());
 
     return success();
