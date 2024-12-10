@@ -140,8 +140,8 @@ int mergeAxes(std::vector<int32_t> &begin, std::vector<int32_t> &size,
 
 // Converts int64_t vector to int32_t vector, returns failure if any value is
 // out of int32_t range.
-LogicalResult convertToI32Array(const SmallVectorImpl<int64_t> &input,
-                                SmallVectorImpl<int32_t> &output) {
+LogicalResult convertToI32Array(const SmallVector<int64_t> &input,
+                                SmallVector<int32_t> &output) {
   for (auto val : input) {
     output.push_back(static_cast<int32_t>(val));
   }
@@ -149,7 +149,7 @@ LogicalResult convertToI32Array(const SmallVectorImpl<int64_t> &input,
 
 // Creates a constant op for a shape vector.
 Value createShapeConstOp(PatternRewriter &rewriter, Location loc,
-                         const SmallVectorImpl<int64_t> &shapeVec) {
+                         const SmallVector<int64_t> &shapeVec) {
   SmallVector<int32_t, 4> shapeVecI32;
   convertToI32Array(shapeVec, shapeVecI32);
   auto shapeType = RankedTensorType::get(
@@ -159,12 +159,11 @@ Value createShapeConstOp(PatternRewriter &rewriter, Location loc,
 }
 
 // Helper function for reshape-transpose-reshape pattern.
-LogicalResult
-reshapeTransposeReshape(PatternRewriter &rewriter, Value tensor,
-                        const SmallVectorImpl<int64_t> &reshapeShape,
-                        const SmallVectorImpl<int64_t> &permVec,
-                        const SmallVectorImpl<int64_t> &origShape,
-                        Value &result) {
+LogicalResult reshapeTransposeReshape(PatternRewriter &rewriter, Value tensor,
+                                      const SmallVector<int64_t> &reshapeShape,
+                                      const SmallVector<int64_t> &permVec,
+                                      const SmallVector<int64_t> &origShape,
+                                      Value &result) {
   auto loc = tensor.getLoc();
   auto tensorType = tensor.getType().cast<RankedTensorType>();
   auto elementType = tensorType.getElementType();
