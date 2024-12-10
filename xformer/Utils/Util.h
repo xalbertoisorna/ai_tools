@@ -72,17 +72,15 @@ int mergeAxes(std::vector<int32_t> &begin, std::vector<int32_t> &size,
               std::vector<int32_t> &inShape, std::vector<int32_t> &outShape,
               int rank);
 
-LogicalResult convertToI32Array(const SmallVector<int64_t> &input,
-                                SmallVector<int32_t> &output);
-
 Value createShapeConstOp(PatternRewriter &rewriter, Location loc,
-                         const SmallVector<int64_t> &shapeVec);
+                         const SmallVector<int64_t, 4> &shapeVec);
 
-LogicalResult reshapeTransposeReshape(PatternRewriter &rewriter, Value tensor,
-                                      const SmallVector<int64_t> &reshapeShape,
-                                      const SmallVector<int64_t> &permVec,
-                                      const SmallVector<int64_t> &origShape,
-                                      Value &result);
+LogicalResult
+reshapeTransposeReshape(PatternRewriter &rewriter, Value tensor,
+                        const SmallVector<int64_t, 4> &reshapeShape,
+                        const SmallVector<int64_t, 4> &permVec,
+                        const SmallVector<int64_t, 4> &origShape,
+                        Value &result);
 
 template <typename T = int64_t>
 static SmallVector<T, 4> denseToVector(DenseIntElementsAttr permAttr) {
