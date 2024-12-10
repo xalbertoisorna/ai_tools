@@ -143,20 +143,15 @@ int mergeAxes(std::vector<int32_t> &begin, std::vector<int32_t> &size,
 LogicalResult convertToI32Array(const SmallVectorImpl<int64_t> &input,
                                 SmallVectorImpl<int32_t> &output) {
   for (auto val : input) {
-    if (val > std::numeric_limits<int32_t>::max() ||
-        val < std::numeric_limits<int32_t>::min())
-      return failure();
     output.push_back(static_cast<int32_t>(val));
   }
-  return success();
 }
 
 // Creates a constant op for a shape vector.
 Value createShapeConstOp(PatternRewriter &rewriter, Location loc,
                          const SmallVectorImpl<int64_t> &shapeVec) {
   SmallVector<int32_t, 4> shapeVecI32;
-  if (failed(convertToI32Array(shapeVec, shapeVecI32)))
-    return nullptr;
+  convertToI32Array(shapeVec, shapeVecI32);
   auto shapeType = RankedTensorType::get(
       {static_cast<int64_t>(shapeVecI32.size())}, rewriter.getI32Type());
   auto shapeAttr = DenseIntElementsAttr::get(shapeType, shapeVecI32);
