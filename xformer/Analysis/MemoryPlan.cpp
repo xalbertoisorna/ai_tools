@@ -160,18 +160,6 @@ void MemoryPlan::buildInputOutputTensorMaps(
     llvm::SmallVector<std::string> argNames;
     auto funcOp = dyn_cast<func::FuncOp>(op);
 
-    auto argAttrs = funcOp->getAttrOfType<mlir::ArrayAttr>(argAttr);
-    for (auto attr : argAttrs) {
-      auto d = attr.dyn_cast_or_null<mlir::DictionaryAttr>();
-
-      const ArrayRef<Attribute> indexPathAttrs =
-          d.get("tf_saved_model.index_path").cast<ArrayAttr>().getValue();
-      auto stringAttr = indexPathAttrs[0].dyn_cast_or_null<mlir::StringAttr>();
-      if (!stringAttr)
-        continue;
-      argNames.push_back(stringAttr.getValue().str());
-    }
-
     llvm::SmallVector<llvm::StringRef, 2> inputNames;
     auto dictAttr =
         funcOp->getAttrOfType<mlir::DictionaryAttr>("tf.entry_function");
@@ -179,6 +167,25 @@ void MemoryPlan::buildInputOutputTensorMaps(
             dictAttr.get(nameAttr).dyn_cast_or_null<mlir::StringAttr>()) {
       str.getValue().split(inputNames, ',', /*MaxSplit=*/-1,
                            /*KeepEmpty=*/false);
+    }
+
+    auto argAttrs = funcOp->getAttrOfType<mlir::ArrayAttr>(argAttr);
+    if (argAttrs) {
+      for (auto attr : argAttrs) {
+        auto d = attr.dyn_cast_or_null<mlir::DictionaryAttr>();
+
+        const ArrayRef<Attribute> indexPathAttrs =
+            d.get("tf_saved_model.index_path").cast<ArrayAttr>().getValue();
+        auto stringAttr =
+            indexPathAttrs[0].dyn_cast_or_null<mlir::StringAttr>();
+        if (!stringAttr)
+          continue;
+        argNames.push_back(stringAttr.getValue().str());
+      }
+    } else {
+      for (int i = 0; i < inputNames.size(); i++) {
+        argNames.push_back(inputNames[i].str());
+      }
     }
 
     assert(argNames.size() == inputNames.size());
