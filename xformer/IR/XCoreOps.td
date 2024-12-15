@@ -162,6 +162,21 @@ def XC_ConcatOp : XC_Op<"concat", [Pure]> {
   let results = (outs TensorOf<[QI8, QI16, F32, I8, I32]> : $output);
 }
 
+def XC_TransposeOp : XC_Op<"transpose", [Pure]> {
+  let summary = "Transpose op";
+
+  let description = [{Transpose op.}];
+
+  let arguments = (ins
+    TensorOf<[QI8, QI16, F32, I8, I32]> : $input,
+
+    I32ArrayAttr:$offsets,
+    I32ArrayAttr:$t_shape
+  );
+
+  let results = (outs TensorOf<[QI8, QI16, F32, I8, I32]> : $output);
+}
+
 def XC_AddOp : XC_Op<"add", [Pure, XC_MemoryOverlappable]> {
   let summary = "Add op";
 

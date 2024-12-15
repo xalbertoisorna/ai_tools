@@ -41,6 +41,7 @@ std::unique_ptr<OperationPass<func::FuncOp>> createReplaceSlicePass();
 std::unique_ptr<OperationPass<func::FuncOp>> createReplaceBroadcastPass();
 std::unique_ptr<OperationPass<func::FuncOp>> createReplacePadPass();
 std::unique_ptr<OperationPass<func::FuncOp>> createReplaceConcatPass();
+std::unique_ptr<OperationPass<func::FuncOp>> createReplaceTransposePass();
 std::unique_ptr<OperationPass<func::FuncOp>> createReplaceConv2DPass();
 std::unique_ptr<OperationPass<func::FuncOp>> createReplaceTransposeConvPass();
 std::unique_ptr<OperationPass<func::FuncOp>> createApplyXCPatternsPass();

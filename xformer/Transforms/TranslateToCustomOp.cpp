@@ -151,6 +151,26 @@ std::vector<uint8_t> ConcatOp::buildCustomOptions() {
   return fbb.GetBuffer();
 }
 
+std::vector<uint8_t> TransposeOp::buildCustomOptions() {
+  flexbuffers::Builder fbb;
+  auto rootMap = fbb.StartMap();
+  auto tShapeVec = fbb.StartVector("s");
+  auto tShape = getTShape().cast<ArrayAttr>();
+  for (int i = 0; i < 4; ++i) {
+    fbb.Int(tShape[i].cast<IntegerAttr>().getInt());
+  }
+  fbb.EndVector(tShapeVec, false, false);
+  auto offsetsVec = fbb.StartVector("o");
+  auto offsets = getOffsets().cast<ArrayAttr>();
+  for (int j = 0; j < 4; ++j) {
+    fbb.Int(offsets[j].cast<IntegerAttr>().getInt());
+  }
+  fbb.EndVector(offsetsVec, false, false);
+  fbb.EndMap(rootMap);
+  fbb.Finish();
+  return fbb.GetBuffer();
+}
+
 std::vector<uint8_t> LoadWeightsOp::buildCustomOptions() {
   flexbuffers::Builder fbb;
   auto rootMap = fbb.StartMap();
@@ -287,6 +307,7 @@ void TranslateToCustomOp::runOnOperation() {
   patterns.insert<RewriteToCustomOp<BroadcastOp>>(ctx);
   patterns.insert<RewriteToCustomOp<PadOp>>(ctx);
   patterns.insert<RewriteToCustomOp<ConcatOp>>(ctx);
+  patterns.insert<RewriteToCustomOp<TransposeOp>>(ctx);
   patterns.insert<RewriteToCustomOp<Beta_ActivationF32Op>>(ctx);
   patterns.insert<RewriteToCustomOp<Beta_ConcatF32Op>>(ctx);
   patterns.insert<RewriteToCustomOp<Beta_ConvF32Op>>(ctx);
