@@ -32,6 +32,8 @@ extern llvm::cl::opt<bool> convDebugOption;
 extern llvm::cl::opt<bool> overlapConvOption;
 extern llvm::cl::opt<bool> offlineOffsetsOption;
 extern llvm::cl::opt<unsigned> convChannelwiseSplitSizeOption;
+extern llvm::cl::list<std::string> sameAllocationInputOutputTensorOption;
+
 } // namespace xcore
 } // namespace mlir
 

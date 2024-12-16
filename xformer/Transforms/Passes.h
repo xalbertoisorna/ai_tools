@@ -30,6 +30,8 @@ std::unique_ptr<OperationPass<func::FuncOp>> createReplaceFCWithConv2DPass();
 std::unique_ptr<OperationPass<func::FuncOp>> createOptimizeConv2DPass();
 std::unique_ptr<OperationPass<func::FuncOp>> createOpSplitPass();
 std::unique_ptr<OperationPass<func::FuncOp>> createApplyTFLPatternsPass();
+std::unique_ptr<OperationPass<func::FuncOp>>
+createVerifySameAllocationTensorsPass();
 std::unique_ptr<OperationPass<func::FuncOp>> createRemoveDynamicShapePass();
 std::unique_ptr<OperationPass<func::FuncOp>> createReplaceAddSubPass();
 std::unique_ptr<OperationPass<func::FuncOp>> createReplaceMulPass();

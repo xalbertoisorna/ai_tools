@@ -7,11 +7,20 @@
 #include "mlir/Analysis/Liveness.h"
 #include "mlir/IR/Value.h"
 #include "llvm/ADT/PriorityQueue.h"
+#include "llvm/ADT/StringMap.h"
 
 #include <set>
 
 namespace mlir {
 namespace xcore {
+
+struct ValueInfo {
+  size_t id;
+  size_t size;
+  bool isConstant;
+  int firstUsed;
+  int lastUsed;
+};
 
 // Represents an analysis for memory planning of a given FuncOp for a model.
 // - Uses liveness analysis and a greedy algorithm to arrange buffers in memory.
@@ -51,6 +60,11 @@ public:
 
   std::vector<Operation *> getOperationsSequence() { return operations; }
 
+  DenseMap<Value, ValueInfo> getValuesInfoMap() { return valueInfo; }
+
+  void buildInputOutputTensorMaps(llvm::StringMap<Value> &inputTensorMap,
+                                  llvm::StringMap<Value> &outputTensorMap);
+
   // OpSplitPlan getOpSplitPlan();
 
   void printMemoryPlan();
@@ -69,14 +83,6 @@ private:
   //
   using ValuesOrderedByOffset =
       std::multiset<QueueItem, IncreasingOffsetsComparator>;
-
-  struct ValueInfo {
-    size_t id;
-    size_t size;
-    bool isConstant;
-    int firstUsed;
-    int lastUsed;
-  };
 
   int getOffset(Value v, int size, DenseMap<Value, ValueInfo> &valueInfo,
                 ValuesOrderedByOffset &allocatedOffsets);

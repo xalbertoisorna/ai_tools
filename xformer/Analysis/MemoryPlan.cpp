@@ -129,7 +129,9 @@ int MemoryPlan::getOffset(Value v, int size,
 
     if ((valueInfo[allocatedVal].firstUsed > valueInfo[v].lastUsed) ||
         (valueInfo[v].firstUsed > valueInfo[allocatedVal].lastUsed)) {
-      // No overlap
+      // There is no overlap with this buffer. We move on until we have a clash.
+      // When there is a clash, we know we can allocate before that one if there
+      // is space as we don't overlap with any of those buffers.
       continue;
     }
 
@@ -147,6 +149,70 @@ int MemoryPlan::getOffset(Value v, int size,
   }
 
   return offset;
+}
+
+void MemoryPlan::buildInputOutputTensorMaps(
+    llvm::StringMap<Value> &inputTensorMap,
+    llvm::StringMap<Value> &outputTensorMap) {
+  auto buildMap = [&](StringRef argAttr, StringRef nameAttr,
+                      llvm::SmallVector<std::string> &attrsInOrder) {
+    llvm::StringMap<std::string> map;
+    llvm::SmallVector<std::string> argNames;
+    auto funcOp = dyn_cast<func::FuncOp>(op);
+
+    llvm::SmallVector<llvm::StringRef, 2> inputNames;
+    auto dictAttr =
+        funcOp->getAttrOfType<mlir::DictionaryAttr>("tf.entry_function");
+    if (auto str =
+            dictAttr.get(nameAttr).dyn_cast_or_null<mlir::StringAttr>()) {
+      str.getValue().split(inputNames, ',', /*MaxSplit=*/-1,
+                           /*KeepEmpty=*/false);
+    }
+
+    auto argAttrs = funcOp->getAttrOfType<mlir::ArrayAttr>(argAttr);
+    if (argAttrs) {
+      for (auto attr : argAttrs) {
+        auto d = attr.dyn_cast_or_null<mlir::DictionaryAttr>();
+
+        const ArrayRef<Attribute> indexPathAttrs =
+            d.get("tf_saved_model.index_path").cast<ArrayAttr>().getValue();
+        auto stringAttr =
+            indexPathAttrs[0].dyn_cast_or_null<mlir::StringAttr>();
+        if (!stringAttr)
+          continue;
+        argNames.push_back(stringAttr.getValue().str());
+      }
+    } else {
+      for (int i = 0; i < inputNames.size(); i++) {
+        argNames.push_back(inputNames[i].str());
+      }
+    }
+
+    assert(argNames.size() == inputNames.size());
+    for (int i = 0; i < inputNames.size(); i++) {
+      map[inputNames[i].str()] = argNames[i];
+      attrsInOrder.push_back(argNames[i]);
+    }
+    return map;
+  };
+
+  llvm::StringMap<std::string> inNameToAttrMap, outNameToAttrMap;
+  llvm::SmallVector<std::string> attrsInOrder;
+
+  inNameToAttrMap = buildMap("arg_attrs", "inputs", attrsInOrder);
+  outNameToAttrMap = buildMap("res_attrs", "outputs", attrsInOrder);
+
+  for (int i = 0; i < inNameToAttrMap.size(); i++) {
+    inputTensorMap[attrsInOrder[i]] = values[i];
+  }
+
+  for (auto v : values) {
+    if (auto loc = v.getLoc()->dyn_cast_or_null<NameLoc>()) {
+      if (outNameToAttrMap.count(loc.getName())) {
+        outputTensorMap[outNameToAttrMap[loc.getName()]] = v;
+      }
+    }
+  }
 }
 
 std::vector<int> MemoryPlan::getAllocatedOffsets(const bool overlapOps,
@@ -245,6 +311,22 @@ std::vector<int> MemoryPlan::getAllocatedOffsets(const bool overlapOps,
     }
   }
 
+  // Handle input output tensor same allocations
+  llvm::DenseSet<Value> inputTensorSet;
+  llvm::DenseSet<Value> outputTensorSet;
+  llvm::StringMap<Value> inputTensorMap, outputTensorMap;
+
+  if (sameAllocationInputOutputTensorOption.size() > 0) {
+    buildInputOutputTensorMaps(inputTensorMap, outputTensorMap);
+    for (int i = 0; i < sameAllocationInputOutputTensorOption.size();
+         i = i + 2) {
+      inputTensorSet.insert(
+          inputTensorMap[sameAllocationInputOutputTensorOption[i]]);
+      outputTensorSet.insert(
+          outputTensorMap[sameAllocationInputOutputTensorOption[i + 1]]);
+    }
+  }
+
   // The comparator keeps the buffers ordered by id if their sizes are the
   // same
   auto DecreasingSizesComparator = [&](QueueItem &lhs, QueueItem &rhs) {
@@ -259,23 +341,51 @@ std::vector<int> MemoryPlan::getAllocatedOffsets(const bool overlapOps,
       queue(DecreasingSizesComparator);
 
   // Insert values and their sizes into priority queue
+  // InOutmap prevents adding in values which are overlapped
+  // In a chain of overlapped values, only the last value is allocated and the
+  // rest are patched up and add in allocated values list later
+  // Don't insert same allocation input and output tensors into queue as they
+  // are allocated separately
   for (auto v : values) {
-    if (!inOutMap.count(v) && !vInfo[v].isConstant) {
+    if (!inOutMap.count(v) && !vInfo[v].isConstant &&
+        !outputTensorSet.contains(v) && !inputTensorSet.contains(v)) {
       queue.push({v, vInfo[v].size});
     }
   }
 
   ValuesOrderedByOffset allocatedValues;
-  auto v = queue.top().first;
-  queue.pop();
-  allocatedValues.insert({v, 0});
+
+  // If there are same allocation input and output tensors, allocate those first
+  if (sameAllocationInputOutputTensorOption.size() > 0) {
+    // Allocate first input and output tensor with offsets of zero
+    allocatedValues.insert(
+        {inputTensorMap[sameAllocationInputOutputTensorOption[0]], 0});
+    allocatedValues.insert(
+        {outputTensorMap[sameAllocationInputOutputTensorOption[1]], 0});
+
+    for (int i = 2; i < sameAllocationInputOutputTensorOption.size();
+         i = i + 2) {
+      auto inputTensor =
+          inputTensorMap[sameAllocationInputOutputTensorOption[i]];
+      int newOffset = getOffset(inputTensor, vInfo[inputTensor].size, vInfo,
+                                allocatedValues);
+      allocatedValues.insert({inputTensor, newOffset});
+      allocatedValues.insert(
+          {outputTensorMap[sameAllocationInputOutputTensorOption[i + 1]],
+           newOffset});
+    }
+  } else {
+    // Else allocate the largest tensor at offset zero
+    auto v = queue.top().first;
+    queue.pop();
+    allocatedValues.insert({v, 0});
+  }
 
   while (!queue.empty()) {
     auto v = queue.top().first;
     auto size = queue.top().second;
     queue.pop();
 
-    // check with allocatedValues list
     int newOffset = getOffset(v, size, vInfo, allocatedValues);
     allocatedValues.insert({v, newOffset});
   }
@@ -312,6 +422,37 @@ std::vector<int> MemoryPlan::getAllocatedOffsets(const bool overlapOps,
   for (auto i : allocatedValues) {
     allocatedValuesOrderedByID.insert(i);
   }
+
+  // Check if buffers clash
+  // for (auto i : allocatedValuesOrderedByID) {
+  //   for (auto j : allocatedValuesOrderedByID) {
+  //     if (vInfo[i.first].id < vInfo[j.first].id) {
+  //       if ((vInfo[i.first].firstUsed > vInfo[j.first].firstUsed &&
+  //            vInfo[i.first].firstUsed < vInfo[j.first].lastUsed) ||
+  //           (vInfo[j.first].firstUsed > vInfo[i.first].firstUsed &&
+  //            vInfo[j.first].firstUsed < vInfo[i.first].lastUsed)) {
+  //         auto iBegin = i.second;
+  //         auto iEnd = i.second + vInfo[i.first].size;
+  //         auto jBegin = j.second;
+  //         auto jEnd = j.second + vInfo[j.first].size;
+  //         if ((iBegin > jBegin && iBegin < jEnd) ||
+  //             (jBegin > iBegin && jBegin < iEnd)) {
+  //           printf("\n\nProblem!");
+  //           std::cout << "\nValue one " << vInfo[i.first].id
+  //                     << ", size = " << vInfo[i.first].size
+  //                     << ", offset = " << i.second
+  //                     << ", first = " << vInfo[i.first].firstUsed
+  //                     << ", last = " << vInfo[i.first].lastUsed;
+  //           std::cout << "\nValue two " << vInfo[j.first].id
+  //                     << ", size = " << vInfo[j.first].size
+  //                     << ", offset = " << j.second
+  //                     << ", first = " << vInfo[j.first].firstUsed
+  //                     << ", last = " << vInfo[j.first].lastUsed;
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
 
   size_t peakUsed = 0;
   size_t peakUsedValueID = 0;
