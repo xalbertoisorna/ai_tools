@@ -1,7 +1,7 @@
 import subprocess
 import typing
 from pathlib import Path
-from typing import Union, List, Optional
+from typing import Union, List, Optional, Tuple
 from .flash import generate_flash
 import re
 
