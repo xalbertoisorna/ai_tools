@@ -13,7 +13,7 @@ __arena_size = 0
 def convert(
     filename: Union[str, Path],
     outfile: Union[str, Path],
-    params: Optional[typing.Dict[str, Optional[str]]],
+    params: Optional[List[Tuple[str, Optional[str]]]],
 ) -> int:
     args: List[str] = ["xcore-opt", "-o", str(outfile)]
 
