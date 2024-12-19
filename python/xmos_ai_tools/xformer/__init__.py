@@ -18,7 +18,7 @@ def convert(
     args: List[str] = ["xcore-opt", "-o", str(outfile)]
 
     if params is not None:
-        for key, val in params.items():
+        for key, val in params:
             if len(key) > 1:
                 flag: str = "--" + str(key)
             else:
