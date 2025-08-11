@@ -1,8 +1,13 @@
-from xmos_ai_tools.xinterpreters import TFLMHostInterpreter
-from xmos_ai_tools.io_server import IOServer
 import numpy as np
 import cv2
 
+from xmos_ai_tools.xinterpreters import TFLMHostInterpreter
+from xmos_ai_tools.io_server import IOServer
+
+from pathlib import Path
+
+cwd = Path(__file__).parent
+imgs_path = cwd / "imgs"
 
 def img_to_arr(image_file, input_details):
     im = cv2.imread(image_file)
@@ -47,7 +52,7 @@ interpreter.allocate_tensors()
 
 print(output_details)
 # Read input image and convert to array
-input_data = img_to_arr("human.jpg", input_details)
+input_data = img_to_arr(imgs_path / "human.jpg", input_details)
 interpreter.set_tensor(input_details["index"], input_data)
 
 # Inference
@@ -56,7 +61,7 @@ interpreter.invoke()
 print_detections(detections)
 
 # Read input image and convert to array
-input_data = img_to_arr("nonhuman.jpg", input_details)
+input_data = img_to_arr(imgs_path / "nonhuman.jpg", input_details)
 interpreter.set_tensor(input_details["index"], input_data)
 
 # Inference
@@ -74,7 +79,7 @@ print_detections(detections)
 ie = IOServer(output_details=(output_details,))
 ie.connect()
 
-input_data = img_to_arr("human.jpg", input_details)
+input_data = img_to_arr(imgs_path/ "human.jpg", input_details)
 ie.write_input_tensor(input_data.tobytes())
 ie.start_inference()
 # ie.read_output_tensor() will return a numpy array
@@ -85,7 +90,7 @@ ie.start_inference()
 detections = ie.read_output_tensor().flatten()
 print_detections(detections)
 
-input_data = img_to_arr("nonhuman.jpg", input_details)
+input_data = img_to_arr(imgs_path / "nonhuman.jpg", input_details)
 ie.write_input_tensor(input_data.tobytes())
 ie.start_inference()
 detections = ie.read_output_tensor().flatten()
