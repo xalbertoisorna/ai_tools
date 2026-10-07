@@ -8,7 +8,10 @@ Setup
 -----
 
 1. Ensure you have XTC tools version 15.3.1 activated in your current terminal.
-2. Install the `xmos_ai_tools` Python package in your virtual environment (venv).
+2. Ensure ``xcore-opt`` is on your ``PATH`` and the AI tools runtime is installed.
+
+CMake includes ``export.cmake`` to export the model and its DDR weights array
+during configuration. No Python export step is needed.
 
 Build and Run
 -------------
@@ -17,7 +20,6 @@ Run the following commands in the current directory.
 
 .. code-block:: console
 
-    python export.py
     # build
     # For XS3 (XCORE.AI)
     cmake -G "Unix Makefiles" -B build

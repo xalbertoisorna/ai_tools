@@ -1,6 +1,17 @@
 Example applications
 ----------------------------
 
+The no-flash, audio, profiling, two-tile, and DDR examples export their models
+with ``xcore-opt`` during CMake configuration. Their ``CMakeLists.txt`` files
+include the local export script::
+
+  # export the model
+  include(${CMAKE_CURRENT_LIST_DIR}/export.cmake)
+
+Ensure ``xcore-opt`` is on your ``PATH`` before configuring these examples.
+No Python model-export step is required. The flash-based and YOLO examples
+retain their existing Python export workflows.
+
 These are 6 example models; in order of complexity
 
 * `app_no_flash <app_no_flash/README.rst>`_  - a single model, no flash memory used. This is the

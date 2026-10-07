@@ -3,9 +3,11 @@ Example without flash
 
 Please consult `here <../../docs/rst/flow.rst>`_ on how to install the tools.
 
+Ensure ``xcore-opt`` is on your ``PATH``. CMake includes ``export.cmake``
+to export the model during configuration; no Python export step is needed.
+
 In order to compile and run this example follow these steps::
 
-  python export.py
   # For XS3 (XCORE.AI)
   cmake -G "Unix Makefiles" -B build
   # For VX4 (XCORE-400), use this configure command instead
@@ -18,7 +20,7 @@ When run, the program should print something similar to::
   No human (9%)
   Human (98%)
 
-The first step optimises the ``vww_quant.tflite`` model for xcore;
+The CMake configure step optimises the ``vww_quant.tflite`` model for xcore;
 it produces three files::
 
   src/model.tflite

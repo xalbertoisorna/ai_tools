@@ -8,7 +8,10 @@ Setup
 -----
 
 1. Ensure you have XTC tools version 15.3.1 activated in your current terminal.
-2. Install the ``xmos_ai_tools`` Python package in your virtual environment (venv).
+2. Ensure ``xcore-opt`` is on your ``PATH`` and the AI tools runtime is installed.
+
+CMake includes ``export.cmake`` to export the model during configuration.
+No Python export step is needed.
 
 Build and Run
 -------------
@@ -16,9 +19,6 @@ Build and Run
 Run the following commands in the current directory.
 
 .. code-block:: console
-
-    # generate model sources
-    python export.py
 
     # build
     # For XS3 (XCORE.AI)
@@ -33,7 +33,7 @@ Run the following commands in the current directory.
 Generated Files
 ---------------
 
-The model generation step optimises the ``denoise_16x8.tflite`` model for
+The CMake configure step optimises the ``denoise_16x8.tflite`` model for
 xcore and produces these files::
 
   src/model_audioi16.tflite
@@ -44,7 +44,7 @@ The first file contains the optimised model, the second file contains the
 generated source code, and the third file contains the header for the source
 code.
 
-The export script places the generated source code and header directly into the
+The ``export.cmake`` script places the generated source code and header directly into the
 source directory, where they are consumed by the CMake build.
 
 Output

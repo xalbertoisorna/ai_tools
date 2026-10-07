@@ -3,9 +3,11 @@ Example single model on two tiles
 
 Please consult `here <../../docs/rst/flow.rst>`_ on how to install the tools.
 
+Ensure ``xcore-opt`` is on your ``PATH``. CMake includes ``export.cmake``
+to export the model during configuration; no Python export step is needed.
+
 In order to compile and run this example follow these steps::
 
-  python export.py
   # For XS3 (XCORE.AI)
   cmake -G "Unix Makefiles" -B build
   # For VX4 (XCORE-400), use this configure command instead
@@ -20,7 +22,7 @@ concluding with something similar to::
   Class with max2 value = 200 and probability = 0.011719
   Class with max3 value = 160 and probability = 0.007812
 
-The first step optimises the ``mobilenetv1_25.tflite`` model for xcore;
+The CMake configure step optimises the ``mobilenetv1_25.tflite`` model for xcore;
 it produces these generated files::
 
   src/model.tflite

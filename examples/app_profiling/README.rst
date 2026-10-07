@@ -3,9 +3,11 @@ Profiling example
 
 Please consult `here <../../docs/rst/flow.rst>`_ on how to install the tools.
 
+Ensure ``xcore-opt`` is on your ``PATH``. CMake includes ``export.cmake``
+to export the model during configuration; no Python export step is needed.
+
 In order to compile and run this example, follow these steps::
 
-  python export.py
   # For XS3 (XCORE.AI)
   cmake -G "Unix Makefiles" -B build
   # For VX4 (XCORE-400), use this configure command instead
@@ -157,13 +159,13 @@ warning emitted by the graph transformer::
 
 The transformer identified that the reference operator had a much higher
 accuracy than the optimised operator, and it reverted to the reference
-operator.  Add the threshold to ``params`` in ``export.py``::
+operator. Set ``EXPORT_OPTS`` in ``export.cmake`` to include the threshold::
 
-  params = [("xcore-conv-err-threshold", 0.5)]
+  set(EXPORT_OPTS "--xcore-conv-err-threshold=0.5")
 
 Then regenerate, rebuild, and run::
 
-  python export.py
+  cmake -S . -B build
   xmake -C build
   xrun --xscope bin/app_profiling.xe
 
@@ -186,14 +188,17 @@ optimised convolution twice more than previously, accounting for an extra 556
 microseconds; the optimised operator is 80 times faster than the reference
 implementation.
 
-As a final optimisation, parallelise the execution.  Add a thread-count option
-to ``params`` in ``export.py``::
+As a final optimisation, parallelise the execution. Add a thread-count option
+to ``EXPORT_OPTS`` in ``export.cmake``::
 
-  params = [("xcore-conv-err-threshold", 0.5), ("xcore-thread-count", 5)]
+  set(EXPORT_OPTS
+      "--xcore-conv-err-threshold=0.5"
+      "--xcore-thread-count=5"
+  )
 
 Regenerate, rebuild, and run::
 
-  python export.py
+  cmake -S . -B build
   xmake -C build
   xrun --xscope bin/app_profiling.xe
 
